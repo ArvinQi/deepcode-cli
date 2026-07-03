@@ -315,10 +315,10 @@ function App({ projectRoot, initialPrompt, resumeSessionId, onRestart }: AppProp
         }
 
         sessionManager.dispose();
-        exit();
+        process.exit(0);
       }, 0);
     },
-    [exit, sessionManager]
+    [sessionManager]
   );
 
   const handlePrompt = useCallback(
@@ -414,6 +414,13 @@ function App({ projectRoot, initialPrompt, resumeSessionId, onRestart }: AppProp
         setRunningProcesses(
           finalActiveSessionId ? (sessionManager.getSession(finalActiveSessionId)?.processes ?? null) : null
         );
+        // Auto-exit after initial -p/--prompt submission completes, without
+        // relying on the busy effect which can miss the transition when React
+        // batches setBusy(true) and setBusy(false) into the same render.
+        if (initialPromptSubmittedRef.current) {
+          initialPromptSubmittedRef.current = false;
+          handleExit({ showCommand: false, showSummary: true });
+        }
       }
     },
     [
@@ -561,6 +568,15 @@ function App({ projectRoot, initialPrompt, resumeSessionId, onRestart }: AppProp
 
     void run();
   }, [handleSubmit, handleSelectSession, initialPrompt, navigateToSubView, refreshSessionsList, resumeSessionId]);
+
+  // Auto-exit after -p/--prompt initial submission completes
+  const prevBusyRef = useRef(busy);
+  useEffect(() => {
+    if (prevBusyRef.current && !busy && initialPromptSubmittedRef.current) {
+      handleExit({ showCommand: false, showSummary: true });
+    }
+    prevBusyRef.current = busy;
+  }, [busy, handleExit]);
 
   const handleDeleteSession = useCallback(
     async (id: string): Promise<void> => {
